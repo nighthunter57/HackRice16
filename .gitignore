@@ -1,0 +1,39 @@
+node_modules/
+.next/
+.env
+.env.*
+!.env.example
+*.tsbuildinfo
+coverage/
+.DS_Store
+artifacts/
+.local/
+.vercel/
+scripts/__pycache__/
+
+# Generated builds, device state, and logs
+.expo/
+dist/
+out/
+next-env.d.ts
+*.log
+__pycache__/
+*.pyc
+
+# Local credentials and signing material
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+.npmrc
+
+# Local tooling, audit notes, and loose input images
+.codex/
+.agents/
+AGENTS.md
+docs/setup-audit.md
+/*.jpeg
+/*.jpg
+/*.png

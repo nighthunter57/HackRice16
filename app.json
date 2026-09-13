@@ -1,0 +1,38 @@
+{
+  "scheme": [
+    "spendly",
+    "canibuyit"
+  ],
+  "plugins": [
+    [
+      "expo-router",
+      {
+        "root": "./mobile/app"
+      }
+    ],
+    "expo-status-bar",
+    [
+      "expo-image-picker",
+      {
+        "photosPermission": "Choose a product photo to check a purchase.",
+        "cameraPermission": "Take a product or price-tag photo to check a purchase.",
+        "microphonePermission": false
+      }
+    ],
+    "expo-secure-store"
+  ],
+  "name": "Spendly",
+  "slug": "spendly",
+  "userInterfaceStyle": "light",
+  "icon": "./public/spendly-logo.png",
+  "web": {
+    "favicon": "./public/spendly-logo.png"
+  },
+  "ios": {
+    "bundleIdentifier": "com.spendly.app",
+    "supportsTablet": false
+  },
+  "android": {
+    "package": "com.spendly.app"
+  }
+}

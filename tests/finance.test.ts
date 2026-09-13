@@ -136,3 +136,55 @@ test('a small pending transaction does not erase the remaining daily spending es
   input.transactions.push({id:'pending',userId:'test',accountId:'checking',timestamp:`${input.startDate}T12:00:00.000Z`,amountCents:-10,merchant:'Food',category:'food',eventType:'discretionary'});
   const day=simulate(input).days[0]; assert.equal(day.expectedSpendingCents,90); assert.equal(day.transactionNetCents,-10); assert.equal(day.closingBalanceCents,49_900);
 });
+
+test('balance impact separates immediate cash from the future low and buffer shortfall', () => {
+  const input = state();
+  input.accounts[0].balanceCents = 185000;
+  input.safetyBufferCents = 40000;
+  input.bills = [{id:'rent',userId:'test',name:'Rent',amountCents:139000,dueDate:'2026-09-13',recurrence:'once'}];
+  const impact = analyze(input, purchase(24900)).today.balanceImpact;
+  assert.equal(impact.currentBalanceCents, 185000);
+  assert.equal(impact.purchasePriceCents, 24900);
+  assert.equal(impact.immediateBalanceAfterPurchaseCents, 160100);
+  assert.equal(impact.projectedMinimumBalanceCents, 21100);
+  assert.equal(impact.safetyBufferCents, 40000);
+  assert.equal(impact.bufferDifferenceCents, -18900);
+});
+
+test('immediate cash excludes same-day events and earmarked savings; wait uses purchase-date cash', () => {
+  const input = state();
+  input.accounts.push({id:'savings',userId:'test',name:'Savings',type:'savings',balanceCents:20000});
+  input.goals = [{id:'goal',userId:'test',name:'Reserved',savedCents:20000,targetCents:20000}];
+  input.incomeEvents = [{id:'pay',userId:'test',amountCents:100000,expectedDate:input.startDate}];
+  const today = simulate(input, purchase(60000)).balanceImpact;
+  assert.equal(today.currentBalanceCents, 50000);
+  assert.equal(today.immediateBalanceAfterPurchaseCents, -10000);
+  assert.equal(today.projectedMinimumBalanceCents, 50000);
+  input.incomeEvents[0].expectedDate = '2026-09-15';
+  const result = analyze(input, purchase(60000));
+  assert.equal(result.wait?.balanceImpact.currentBalanceCents, 50000);
+  assert.equal(result.wait?.balanceImpact.balanceBeforePurchaseCents, 150000);
+  assert.equal(result.wait?.balanceImpact.immediateBalanceAfterPurchaseCents, 90000);
+  assert.equal(result.wait?.balanceImpact.purchaseDate, '2026-09-15');
+  assert.equal(result.wait?.balanceImpact.isFuturePurchase, true);
+  assert.equal(result.baseline.balanceImpact.purchasePriceCents, 0);
+  assert.equal(result.baseline.balanceImpact.immediateBalanceAfterPurchaseCents, 50000);
+});
+
+test('balance impact preserves exact buffer equality, one-cent shortfalls, and zero prices', () => {
+  assert.equal(simulate(state(), purchase(40000)).balanceImpact.bufferDifferenceCents, 0);
+  assert.equal(simulate(state(), purchase(40001)).balanceImpact.bufferDifferenceCents, -1);
+  const free = simulate(state(), purchase(0)).balanceImpact;
+  assert.equal(free.immediateBalanceAfterPurchaseCents, free.currentBalanceCents);
+  assert.equal(free.bufferDifferenceCents, 40000);
+});
+
+test('balance impact presentation preserves cents and explains positive cash with future shortfall', async () => {
+  const { balanceImpactRows, balanceImpactExplanation } = await import('../src/lib/balance-impact');
+  const input = state();
+  input.bills = [{id:'rent',userId:'test',name:'Rent',amountCents:10000,dueDate:'2026-09-13',recurrence:'once'}];
+  const impact = simulate(input, purchase(35001)).balanceImpact;
+  assert.match(balanceImpactExplanation(impact), /\$149\.99 immediately/);
+  assert.match(balanceImpactExplanation(impact), /\$49\.99, below your \$100\.00/);
+  assert.deepEqual(balanceImpactRows(impact).at(-1), {label:'Shortfall',value:'-$50.01'});
+});

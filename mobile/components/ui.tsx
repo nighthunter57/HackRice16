@@ -17,12 +17,12 @@ import { router } from "expo-router";
 import { purchaseFromInput } from "../lib/model";
 import { useApp } from "../lib/store";
 export const colors = {
-  bg: "#F7F6F0",
-  ink: "#213E36",
-  muted: "#64756D",
-  green: "#245D47",
-  soft: "#E8EFE5",
-  line: "#DCE2D9",
+  bg: "#F5FAF9",
+  ink: "#1D2F40",
+  muted: "#536F73",
+  green: "#087C78",
+  soft: "#E0F7EE",
+  line: "#D9E8E5",
   amber: "#865415",
   amberBg: "#FBEDD4",
   red: "#A34136",
@@ -120,17 +120,22 @@ export function Field({
   onChangeText,
   price = false,
   secure = false,
+  editable = true,
+  placeholder,
 }: {
   label: string;
   value: string;
   onChangeText: (value: string) => void;
   price?: boolean;
   secure?: boolean;
+  editable?: boolean;
+  placeholder?: string;
 }) {
   return (
     <View style={{ gap: 8 }}>
       <Text style={s.label}>{label}</Text>
       <TextInput
+        editable={editable}
         accessibilityLabel={label}
         value={value}
         onChangeText={onChangeText}
@@ -139,7 +144,7 @@ export function Field({
         autoCapitalize={secure ? "none" : "sentences"}
         autoCorrect={!secure}
         maxLength={price ? 12 : 200}
-        placeholder={price ? "0.00" : "Product name"}
+        placeholder={placeholder ?? (price ? "0.00" : "Product name")}
         placeholderTextColor={colors.muted}
         style={s.input}
       />
@@ -163,17 +168,26 @@ export function PurchaseForm({
   const [price, setPrice] = useState(initialPrice);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [requestFailed, setRequestFailed] = useState(false);
   const app = useApp();
-  async function submit() {
+  async function submit(useDemo = false) {
+    if (busy || app.loading || !app.ready) return;
     try {
       const purchase = purchaseFromInput(name, price, category);
-      onConfirmed?.();
       setError("");
+      setRequestFailed(false);
       setBusy(true);
       await new Promise<void>((resolve) =>
         requestAnimationFrame(() => resolve()),
       );
-      await app.check(purchase);
+      try {
+        if (useDemo) await app.checkDemo(purchase);
+        else await app.check(purchase);
+      } catch (cause) {
+        setRequestFailed(true);
+        throw cause;
+      }
+      onConfirmed?.();
       router.push("/result");
     } catch (cause) {
       setError(
@@ -187,8 +201,8 @@ export function PurchaseForm({
   }
   return (
     <View style={{ gap: 16 }}>
-      <Field label="Product" value={name} onChangeText={setName} />
-      <Field label="Price · USD" value={price} onChangeText={setPrice} price />
+      <Field label="Product" value={name} onChangeText={setName} editable={!busy && !app.loading} />
+      <Field label="Price · USD" value={price} onChangeText={setPrice} price editable={!busy && !app.loading} />
       {error ? <Note>{error}</Note> : null}
       {busy ? (
         <View accessibilityLiveRegion="polite" style={s.row}>
@@ -197,11 +211,12 @@ export function PurchaseForm({
         </View>
       ) : null}
       <Button
-        title={busy ? "Checking…" : title}
+        title={busy ? "Checking…" : requestFailed ? "Try again" : title}
         icon="arrow-right"
         onPress={() => void submit()}
-        disabled={busy || !app.ready}
+        disabled={busy || app.loading || !app.ready}
       />
+      {requestFailed && <Button title="Use sample finances" secondary disabled={busy || app.loading || !app.ready} onPress={() => void submit(true)} />}
     </View>
   );
 }
@@ -217,7 +232,7 @@ export const s = StyleSheet.create({
     padding: 22,
     borderRadius: 24,
     gap: 16,
-    shadowColor: "#213E36",
+    shadowColor: "#1D2F40",
     shadowOpacity: 0.035,
     shadowOffset: { width: 0, height: 4 },
     shadowRadius: 16,

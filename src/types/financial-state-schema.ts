@@ -9,6 +9,6 @@ export const financialStateSchema=z.object({
   accounts:z.array(z.object({id:text,userId:text,name:text,type:z.enum(['checking','savings']),balanceCents:cents})),
   transactions:z.array(z.object({id:text,userId:text,accountId:text,timestamp:z.string(),amountCents:cents,category:text,merchant:text,eventType:z.enum(['discretionary','income','bill','transfer'])})),
   bills:z.array(z.object({id:text,userId:text,name:text,amountCents:cents.nonnegative(),dueDate:date,recurrence,mandatory:z.boolean().optional()})),
-  incomeEvents:z.array(z.object({id:text,userId:text,name:text.optional(),amountCents:cents.nonnegative(),expectedDate:date,recurrence:recurrence.optional()})),
+  incomeEvents:z.array(z.object({id:text,userId:text,accountId:text.optional(),name:text.optional(),amountCents:cents.nonnegative(),expectedDate:date,recurrence:recurrence.optional()})),
   goals:z.array(z.object({id:text,userId:text,name:text,targetCents:cents.nonnegative(),savedCents:cents.nonnegative(),deadline:date.optional(),maxDelayDays:z.number().int().nonnegative().optional()})),
 }).superRefine((value,context)=>{try{validateState(value);}catch{context.addIssue({code:'custom',message:'Invalid financial state'});}});

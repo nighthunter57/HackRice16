@@ -127,7 +127,22 @@ function result(state: FinancialState, days: ForecastDay[], baselineDates: (stri
   });
   const billsCovered = days.every(day => day.billsCovered);
   const safetyBufferViolation = days.some(day => day.safetyBufferViolation);
-  return { days, minimumBalanceCents, minimumBalanceDate, finalBalanceCents: lastDay.closingBalanceCents,
+  const purchaseDay = days.find(day => day.date === proposedPurchaseDate);
+  const purchasePriceCents = purchaseDay?.purchasesCents ?? 0;
+  const currentBalanceCents = firstDay.openingBalanceCents;
+  const isFuturePurchase = proposedPurchaseDate !== null && proposedPurchaseDate !== state.startDate;
+  const balanceBeforePurchaseCents = isFuturePurchase && purchaseDay
+    ? addCents(purchaseDay.closingBalanceCents, purchasePriceCents)
+    : currentBalanceCents;
+  const balanceImpact = {
+    currentBalanceCents, purchasePriceCents, balanceBeforePurchaseCents,
+    immediateBalanceAfterPurchaseCents: addCents(balanceBeforePurchaseCents, -purchasePriceCents),
+    projectedMinimumBalanceCents: minimumBalanceCents,
+    safetyBufferCents: state.safetyBufferCents,
+    bufferDifferenceCents: addCents(minimumBalanceCents, -state.safetyBufferCents),
+    purchaseDate: proposedPurchaseDate, isFuturePurchase,
+  };
+  return { balanceImpact, days, minimumBalanceCents, minimumBalanceDate, finalBalanceCents: lastDay.closingBalanceCents,
     billsCovered, safetyBufferViolation, goalImpacts, proposedPurchaseDate,
     verdict: minimumBalanceCents < 0 || !billsCovered || safetyBufferViolation || goalDeadlineViolation ? 'NOT_RECOMMENDED' : goalViolation ? 'CAUTION' : 'SAFE' };
 }

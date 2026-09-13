@@ -1,0 +1,48 @@
+"""Exercise Payments with isolated auth and real local financial calculations."""
+import os
+from auth_fixture import authenticated_fixture
+from playwright.sync_api import sync_playwright, expect
+base=os.environ.get('MOBILE_PREVIEW_URL','http://127.0.0.1:8084')
+with sync_playwright() as p:
+    browser=p.chromium.launch(channel='chrome',headless=True)
+    page=browser.new_page(viewport={'width':390,'height':844})
+    errors=[]
+    page.on('pageerror',lambda error:errors.append(str(error)))
+    authenticated_fixture(page)
+    page.route('**/api/analyze',lambda route:route.fulfill(status=503,content_type='application/json',body='{}'))
+    page.goto(base,wait_until='networkidle')
+    page.get_by_role('button',name='Payments',exact=True).click()
+    page.get_by_role('button',name='Add payment',exact=True).click()
+    page.get_by_role('textbox',name='Payment name',exact=True).fill('Studio space')
+    page.get_by_role('textbox',name='Amount · USD',exact=True).fill('12.34')
+    page.get_by_role('textbox',name='Due date · YYYY-MM-DD',exact=True).fill('2026-02-30')
+    page.get_by_role('button',name='Save payment',exact=True).click()
+    expect(page.get_by_role('alert')).to_contain_text('valid date')
+    page.get_by_role('textbox',name='Due date · YYYY-MM-DD',exact=True).fill('2026-09-30')
+    page.get_by_role('button',name='Save payment',exact=True).click()
+    expect(page.get_by_text('Payment saved. Your forecast is updated.',exact=True)).to_be_visible()
+    expect(page.get_by_text('$12.34',exact=True)).to_be_visible()
+    expect(page.get_by_role('button',name='Cancel',exact=True)).not_to_be_visible()
+    page.screenshot(path='/tmp/canibuyit-payments.png',full_page=True)
+    page.reload(wait_until='networkidle')
+    page.get_by_role('button',name='Edit payment: Studio space',exact=True).click()
+    expect(page.get_by_role('textbox',name='Amount · USD',exact=True)).to_have_value('12.34')
+    page.get_by_role('textbox',name='Amount · USD',exact=True).fill('23.45')
+    page.get_by_role('button',name='Weekly',exact=True).click()
+    page.get_by_role('button',name='Save payment',exact=True).click()
+    expect(page.get_by_role('button',name='Edit payment: Studio space',exact=True)).to_have_count(1)
+    expect(page.get_by_text('$23.45',exact=True)).to_be_visible()
+    page.get_by_role('button',name='Remove payment: Studio space',exact=True).click()
+    page.get_by_role('button',name='Cancel',exact=True).click()
+    expect(page.get_by_role('button',name='Edit payment: Studio space',exact=True)).to_be_visible()
+    page.get_by_role('button',name='Remove payment: Studio space',exact=True).click()
+    page.get_by_role('button',name='Remove payment',exact=True).click()
+    expect(page.get_by_text('Payment removed. Your forecast is updated.',exact=True)).to_be_visible()
+    page.reload(wait_until='networkidle')
+    expect(page.get_by_role('button',name='Edit payment: Studio space',exact=True)).to_have_count(0)
+    for width in [320,390,768]:
+        page.set_viewport_size({'width':width,'height':844})
+        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    assert not errors,errors
+    print('PASS: custom payment validation, add, edit, recurrence selection, persistence, cancel/delete, responsive layout; no runtime errors.')
+    browser.close()

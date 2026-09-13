@@ -1,0 +1,111 @@
+"""Real Expo web + backend auth smoke. Creates and deletes one isolated .invalid account.
+Run with Python Playwright/Chrome, a migrated backend, and an Expo web preview.
+MOBILE_PREVIEW_URL defaults to http://127.0.0.1:8084; AUTH_API_URL to port 3000.
+"""
+import os, uuid, secrets
+from playwright.sync_api import sync_playwright, expect
+base=os.getenv('MOBILE_PREVIEW_URL','http://127.0.0.1:8084')
+api=os.getenv('AUTH_API_URL','http://127.0.0.1:3000')
+email=f'auth-browser-{uuid.uuid4()}@example.invalid'
+password=secrets.token_urlsafe(24)
+replacement=secrets.token_urlsafe(24)
+with sync_playwright() as p:
+    browser=p.chromium.launch(channel='chrome',headless=True)
+    context=browser.new_context(viewport={'width':390,'height':844})
+    page=context.new_page(); page.set_default_timeout(12000); errors=[];registered=False;deleted=False
+    page.on('pageerror',lambda e:errors.append(str(e)))
+    try:
+        print('Checking protected route',flush=True)
+        page.goto(base+'/profile',wait_until='networkidle')
+        expect(page.get_by_text('Welcome back',exact=True)).to_be_visible(timeout=20000)
+        page.screenshot(path='/tmp/canibuyit-auth-sign-in.png')
+        print('Checking registration',flush=True)
+        page.get_by_role('link',name='Create account',exact=True).click()
+        page.get_by_role('textbox',name='Name',exact=True).fill('Auth Browser Test')
+        page.get_by_role('textbox',name='Email',exact=True).fill(email)
+        page.get_by_role('textbox',name='Password',exact=True).fill(password)
+        page.get_by_role('textbox',name='Confirm Password',exact=True).fill('mismatched password')
+        page.get_by_role('button',name='Create Account',exact=True).click()
+        expect(page.get_by_text('Passwords do not match.',exact=True)).to_be_visible()
+        page.get_by_role('textbox',name='Confirm Password',exact=True).fill(password)
+        page.get_by_role('button',name='Create Account',exact=True).click()
+        expect(page.get_by_role('tab',name='Profile',exact=True)).to_be_visible(timeout=20000);registered=True;print('Checking persistence',flush=True)
+        print('Checking Next preview sign-in',flush=True)
+        preview_context=browser.new_context(viewport={'width':1200,'height':950})
+        preview=preview_context.new_page()
+        preview.goto(os.getenv('WEB_PREVIEW_URL',api),wait_until='networkidle')
+        preview.get_by_role('button',name='Settings',exact=True).click()
+        preview.screenshot(path='/tmp/canibuyit-web-auth.png')
+        preview.get_by_label('Email',exact=True).fill(email)
+        preview.get_by_label('Password',exact=True).fill(password)
+        preview.get_by_role('button',name='Sign In',exact=True).click()
+        # The financial preview remounts on user change, closing Settings.
+        expect(preview.get_by_label('Password',exact=True)).to_have_count(0)
+        preview.get_by_role('button',name='Settings',exact=True).click()
+        expect(preview.get_by_role('button',name='Sign Out',exact=True)).to_be_visible(timeout=10000)
+        preview.get_by_role('button',name='See my financial future',exact=True).click()
+        expect(preview.get_by_role('button',name='See my financial future',exact=True)).to_be_enabled(timeout=15000)
+        preview.reload(wait_until='networkidle')
+        preview.get_by_role('button',name='Settings',exact=True).click()
+        expect(preview.get_by_role('button',name='Sign Out',exact=True)).to_be_visible(timeout=15000)
+        preview.get_by_role('button',name='Sign Out',exact=True).click()
+        expect(preview.get_by_role('button',name='Sign Out',exact=True)).to_have_count(0)
+        preview_context.close()
+        # HttpOnly refresh cookie restores the session; browser storage holds no credentials.
+        cookies=context.cookies(api+'/api/auth')
+        assert any(c['name']=='canibuyit_refresh' and c['httpOnly'] for c in cookies)
+        assert page.evaluate("Object.keys(localStorage).every(k=>!k.includes('auth.session'))")
+        page.reload(wait_until='networkidle')
+        expect(page.get_by_role('tab',name='Profile',exact=True)).to_be_visible(timeout=20000)
+        page.get_by_role('tab',name='Profile',exact=True).click()
+        expect(page.get_by_text(email,exact=True)).to_be_visible()
+        print('Checking profile and password change',flush=True)
+        page.get_by_role('textbox',name='Name',exact=True).fill('Updated Test Name')
+        page.get_by_role('button',name='Save name',exact=True).click()
+        expect(page.get_by_text('Profile updated.',exact=True)).to_be_visible(timeout=10000)
+        page.get_by_role('button',name='Change Password',exact=True).click()
+        page.get_by_role('textbox',name='Current Password',exact=True).fill(password)
+        page.get_by_role('textbox',name='New Password',exact=True).fill(replacement)
+        page.get_by_role('textbox',name='Confirm Password',exact=True).fill(replacement)
+        page.get_by_role('button',name='Update password',exact=True).click()
+        expect(page.get_by_text('Password updated. Other sessions have been signed out.',exact=True)).to_be_visible(timeout=15000)
+        password=replacement
+        page.screenshot(path='/tmp/canibuyit-auth-profile.png')
+        print('Checking logout and recovery',flush=True)
+        page.get_by_role('button',name='Sign Out',exact=True).click()
+        expect(page.get_by_text('Welcome back',exact=True)).to_be_visible(timeout=10000)
+        page.goto(base+'/history',wait_until='networkidle')
+        expect(page.get_by_text('Welcome back',exact=True)).to_be_visible(timeout=10000)
+        page.get_by_role('link',name='Forgot password?',exact=True).click()
+        page.get_by_role('textbox',name='Email',exact=True).fill('nonexistent-'+email)
+        page.get_by_role('button',name='Send Reset Link',exact=True).click()
+        expect(page.get_by_text('If an account exists for this email, reset instructions have been sent.',exact=True)).to_be_visible(timeout=10000)
+        page.get_by_role('link',name='Back to Sign In',exact=True).click()
+        page.get_by_role('textbox',name='Email',exact=True).fill(email)
+        page.get_by_role('textbox',name='Password',exact=True).fill('wrong password')
+        page.get_by_role('button',name='Sign In',exact=True).click()
+        expect(page.get_by_text('Invalid email or password.',exact=True)).to_be_visible(timeout=10000)
+        page.get_by_role('textbox',name='Password',exact=True).fill(password)
+        page.get_by_role('button',name='Sign In',exact=True).click()
+        expect(page.get_by_role('tab',name='Profile',exact=True)).to_be_visible(timeout=15000)
+        page.get_by_role('tab',name='Profile',exact=True).click()
+        print('Checking deletion',flush=True)
+        page.get_by_role('button',name='Delete Account',exact=True).click()
+        expect(page.get_by_role('button',name='Permanently delete account',exact=True)).to_be_disabled()
+        page.get_by_role('textbox',name='Type DELETE to confirm',exact=True).fill('DELETE')
+        page.get_by_role('button',name='Permanently delete account',exact=True).click()
+        expect(page.get_by_text('Welcome back',exact=True)).to_be_visible(timeout=20000);deleted=True
+        assert not errors,'Browser reported a runtime error'
+        print('PASS: protected routes, registration, validation, persistence, profile, password change, logout, recovery UX, login, deletion; no browser runtime errors.',flush=True)
+    except Exception:
+        page.screenshot(path='/tmp/canibuyit-auth-failure.png',timeout=5000)
+        raise
+    finally:
+        if registered and not deleted:
+            login=context.request.post(api+'/api/auth/login',data={'email':email,'password':password})
+            if login.ok:
+                token=login.json().get('accessToken')
+                response=context.request.delete(api+'/api/me',headers={'Authorization':'Bearer '+token},data={'confirmation':'DELETE'})
+                assert response.ok,'Test account cleanup failed'
+        context.close()
+        browser.close()

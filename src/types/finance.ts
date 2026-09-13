@@ -33,6 +33,7 @@ export interface Bill {
 }
 
 export interface IncomeEvent {
+  accountId?: string;
   id: string;
   userId: string;
   name?: string;
@@ -109,7 +110,22 @@ export interface GoalImpact {
   delayDays: number | null;
 }
 
+export interface BalanceImpact {
+  currentBalanceCents: number;
+  purchasePriceCents: number;
+  /** Opening spendable cash for today; projected cash before a future purchase. */
+  balanceBeforePurchaseCents: number;
+  immediateBalanceAfterPurchaseCents: number;
+  projectedMinimumBalanceCents: number;
+  safetyBufferCents: number;
+  /** Forecast minimum minus safety buffer; negative means a shortfall. */
+  bufferDifferenceCents: number;
+  purchaseDate: string | null;
+  isFuturePurchase: boolean;
+}
+
 export interface SimulationResult {
+  balanceImpact: BalanceImpact;
   days: ForecastDay[];
   minimumBalanceCents: number;
   minimumBalanceDate: string;

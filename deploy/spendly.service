@@ -1,0 +1,25 @@
+[Unit]
+Description=Spendly financial backend
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=spendly
+Group=spendly
+WorkingDirectory=/opt/spendly/current
+ExecStart=/usr/local/bin/node deploy/start-backend.cjs
+Restart=on-failure
+RestartSec=5
+Environment=NODE_ENV=production
+Environment=NEXT_TELEMETRY_DISABLED=1
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/spendly
+UMask=0077
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

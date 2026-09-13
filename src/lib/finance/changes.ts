@@ -8,11 +8,22 @@ export function forecastChange(previous: FinancialState, current: FinancialState
   if (previous.userId !== current.userId || previous.startDate !== current.startDate ||
       previous.horizonDays !== current.horizonDays || previous.safetyBufferCents !== current.safetyBufferCents) return null;
   const causes: SafeDateChange['causes'] = [];
+  const previousCash=previous.accounts.reduce((total,a)=>addCents(total,a.balanceCents),0);
+  const currentCash=current.accounts.reduce((total,a)=>addCents(total,a.balanceCents),0);
+  if(previousCash!==currentCash) causes.push({label:'Current account balance changed',amountCents:addCents(previousCash,-currentCash)});
+  const oldPending=new Map(previous.transactions.filter(t=>dateFromTimestamp(t.timestamp)>=previous.startDate).map(t=>[t.id,t]));
+  for(const tx of current.transactions.filter(t=>dateFromTimestamp(t.timestamp)>=current.startDate)) {
+    const old=oldPending.get(tx.id);
+    if(!old || old.amountCents!==tx.amountCents || old.timestamp!==tx.timestamp)
+      causes.push({label:`${tx.merchant} (${dateFromTimestamp(tx.timestamp)})`,amountCents:addCents(old?.amountCents??0,-tx.amountCents)});
+    oldPending.delete(tx.id);
+  }
+  for(const tx of oldPending.values()) causes.push({label:`No longer pending: ${tx.merchant}`,amountCents:tx.amountCents});
   const oldBills = new Map(previous.bills.map(b => [b.id,b]));
   for (const bill of current.bills) {
     const old = oldBills.get(bill.id);
-    if (!old || old.amountCents !== bill.amountCents || old.dueDate !== bill.dueDate)
-      causes.push({label:`${bill.name} (${bill.dueDate})`,amountCents:addCents(bill.amountCents,-(old?.amountCents??0))});
+    if (!old || old.amountCents !== bill.amountCents || old.dueDate !== bill.dueDate || old.recurrence !== bill.recurrence)
+      causes.push({label:`${bill.name} (${bill.dueDate}, ${bill.recurrence})`,amountCents:addCents(bill.amountCents,-(old?.amountCents??0))});
     oldBills.delete(bill.id);
   }
   for (const bill of oldBills.values()) causes.push({label:`Removed: ${bill.name}`,amountCents:-bill.amountCents});

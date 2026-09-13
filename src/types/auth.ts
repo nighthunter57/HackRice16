@@ -1,0 +1,14 @@
+import { z } from 'zod';
+export const emailSchema=z.string().trim().toLowerCase().email().max(254);
+export const passwordSchema=z.string().min(10,'Use at least 10 characters.').max(128,'Use at most 128 characters.');
+export const nameSchema=z.string().trim().min(1).max(100);
+export const userSchema=z.object({id:z.string().uuid(),name:nameSchema,email:emailSchema,createdAt:z.string().datetime()});
+export type AuthUser=z.infer<typeof userSchema>;
+export const tokensSchema=z.object({user:userSchema,accessToken:z.string().min(1),refreshToken:z.string().min(32)});
+export type AuthTokens=z.infer<typeof tokensSchema>;
+export const registerSchema=z.object({name:nameSchema,email:emailSchema,password:passwordSchema}).strict();
+export const loginSchema=z.object({email:emailSchema,password:z.string().min(1).max(128)}).strict();
+export const refreshSchema=z.object({refreshToken:z.string().regex(/^[A-Za-z0-9_-]{64}$/)}).strict();
+export const forgotSchema=z.object({email:emailSchema}).strict();
+export const resetSchema=z.object({token:z.string().regex(/^[A-Za-z0-9_-]{64}$/),newPassword:passwordSchema}).strict();
+export const changePasswordSchema=z.object({currentPassword:z.string().min(1).max(128),newPassword:passwordSchema}).strict();
