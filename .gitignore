@@ -7,6 +7,7 @@ node_modules/
 coverage/
 .DS_Store
 artifacts/
+output/
 .local/
 .vercel/
 scripts/__pycache__/
